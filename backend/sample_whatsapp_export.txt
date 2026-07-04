@@ -1,0 +1,14 @@
+[06/01/24, 10:15:23] Rajesh Kumar: Hi, this is Rajesh from TechVision Solutions. Thanks for connecting!
+[06/01/24, 10:16:45] Priya Sharma: Hi Rajesh! Yes, we're interested in your CRM solution. Can you tell me more about pricing?
+[06/01/24, 10:18:12] Rajesh Kumar: Absolutely! Our pricing starts at ₹50,000/month for up to 50 users. This includes all core features like lead management, pipeline tracking, and custom reports.
+[06/01/24, 10:20:33] Priya Sharma: That's a bit higher than what we budgeted. We're currently using Salesforce, which is ₹30,000/month.
+[06/01/24, 10:22:15] Rajesh Kumar: I understand the budget concern. Let me schedule a demo for next week so you can see the value we provide beyond Salesforce. How does Tuesday 3 PM work?
+[06/01/24, 10:24:50] Priya Sharma: Tuesday works, but I'll need to check with my CFO first about the budget. Can you send me a detailed feature comparison with Salesforce?
+[06/01/24, 10:25:30] Rajesh Kumar: Perfect! I'll send you a calendar invite and the comparison doc by EOD today. Also, what are your main pain points with Salesforce?
+[06/01/24, 10:27:15] Priya Sharma: The main issues are: 1) Reports are too complex to customize, 2) Mobile app is slow, 3) Integration with our inventory system requires expensive plugins
+[06/01/24, 10:29:00] Rajesh Kumar: Great insights! Our solution addresses all three - we have a visual report builder, fast mobile app, and free integrations with 100+ systems. I'll highlight these in the demo.
+[06/01/24, 10:30:22] Priya Sharma: Sounds good. Also, we need at least 5 user licenses to start. Is there a discount for annual payment?
+[06/01/24, 10:32:10] Rajesh Kumar: Yes! Annual payment gives you 20% off. So ₹50K/month becomes ₹40K/month, which is only ₹10K more than your current Salesforce cost but with much more value.
+[06/01/24, 10:33:45] Priya Sharma: That's more reasonable. Let's definitely do the demo on Tuesday. Please loop in our IT head Amit Verma (amit@company.com) as well.
+[06/01/24, 10:35:00] Rajesh Kumar: Excellent! I'll send the invite to both of you. Looking forward to showing you how we can transform your sales process. Have a great day!
+[06/01/24, 10:35:30] Priya Sharma: Thanks Rajesh, see you Tuesday!
