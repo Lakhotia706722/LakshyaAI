@@ -1,4 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { api } from '../api/client'
 
 const navigation = [
   { name: 'Dashboard', path: '/', icon: '📊' },
@@ -11,24 +13,35 @@ const navigation = [
 
 export default function Layout({ children, user, onLogout }) {
   const location = useLocation()
+  const [apiStatus, setApiStatus] = useState(null)
+
+  useEffect(() => {
+    api.get('/status').then(r => setApiStatus(r.data)).catch(() => {})
+  }, [])
+
+  const currentPage = navigation.find(item =>
+    item.path === location.pathname ||
+    (item.path !== '/' && location.pathname.startsWith(item.path))
+  )
 
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className="w-64 bg-primary-800 text-white flex flex-col">
+      <div className="w-64 bg-primary-800 text-white flex flex-col shrink-0">
         <div className="p-6">
-          <h1 className="text-2xl font-bold">LAKSHYA AI</h1>
+          <h1 className="text-2xl font-bold tracking-tight">LAKSHYA AI</h1>
           <p className="text-xs text-primary-200 mt-1">Revenue Intelligence</p>
         </div>
         
-        <nav className="flex-1 px-3">
+        <nav className="flex-1 px-3 overflow-y-auto">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.path
+            const isActive = location.pathname === item.path ||
+              (item.path !== '/' && location.pathname.startsWith(item.path))
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center px-4 py-3 mb-2 rounded-lg transition-colors ${
+                className={`flex items-center px-4 py-3 mb-1 rounded-lg transition-colors ${
                   isActive
                     ? 'bg-primary-600 text-white'
                     : 'text-primary-100 hover:bg-primary-700'
@@ -41,15 +54,15 @@ export default function Layout({ children, user, onLogout }) {
           })}
         </nav>
         
-        <div className="p-4 border-t border-primary-700">
+        <div className="p-4 border-t border-primary-700 shrink-0">
           <div className="flex items-center">
-            <div className="flex-1">
-              <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-xs text-primary-200">{user?.email}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user?.name}</p>
+              <p className="text-xs text-primary-200 truncate">{user?.email}</p>
             </div>
             <button
               onClick={onLogout}
-              className="text-primary-200 hover:text-white text-sm"
+              className="text-primary-200 hover:text-white text-sm ml-2 shrink-0"
               title="Logout"
             >
               🚪
@@ -61,11 +74,23 @@ export default function Layout({ children, user, onLogout }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Bar */}
-        <header className="bg-white shadow-sm">
-          <div className="px-6 py-4">
+        <header className="bg-white shadow-sm shrink-0">
+          <div className="px-6 py-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-800">
-              {navigation.find(item => item.path === location.pathname)?.name || 'Dashboard'}
+              {currentPage?.name || 'Dashboard'}
             </h2>
+            <div className="flex items-center gap-3">
+              {apiStatus && !apiStatus.anthropic_configured && (
+                <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1 rounded-full">
+                  ⚠️ Add ANTHROPIC_API_KEY to enable AI
+                </span>
+              )}
+              {apiStatus && !apiStatus.openai_configured && (
+                <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-3 py-1 rounded-full">
+                  ⚠️ Add OPENAI_API_KEY to enable transcription
+                </span>
+              )}
+            </div>
           </div>
         </header>
 

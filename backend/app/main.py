@@ -44,3 +44,12 @@ def root():
 def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "version": "1.0.0"}
+
+
+@app.get("/api/status")
+def api_status():
+    """Reports which optional integrations are configured (no secrets exposed)"""
+    return {
+        "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+    }
