@@ -4,13 +4,9 @@ from sqlalchemy import pool
 from alembic import context
 import os
 import sys
-from dotenv import load_dotenv
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-# Load environment variables
-load_dotenv()
 
 # this is the Alembic Config object
 config = context.config
@@ -19,15 +15,21 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import models for autogenerate
+# Import ALL models so autogenerate sees every table
 from app.db import Base
-from app.models import User, Company, Deal, DealEvent, CallRecording, Invoice, ForecastSnapshot
+from app.models import (  # noqa: F401
+    User, Organization, OrgMember, RefreshToken,
+    Company, Deal, DealEvent, CallRecording, Invoice,
+    ForecastSnapshot, AuditLog, ConsentRecord,
+)
 
 # Set target metadata for autogenerate
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url with environment variable
-database_url = os.getenv("DATABASE_URL", "sqlite:///./lakshya.db")
+# Override sqlalchemy.url from config / env
+from app.config import get_settings
+_settings = get_settings()
+database_url = _settings.DATABASE_URL
 config.set_main_option("sqlalchemy.url", database_url)
 
 

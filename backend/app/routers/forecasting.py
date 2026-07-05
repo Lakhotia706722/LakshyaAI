@@ -1,27 +1,23 @@
 """
 Phase 4 — Revenue Forecasting (Tally CSV reconciliation)
-
-Matches uploaded CSV invoice data against CRM deals to surface
-the gap between pipeline and actual invoiced revenue.
-
-NOTE: This is a mock Tally integration. Real version requires live Tally API.
+Now org-scoped — all data filtered by the current user's org.
 """
 import csv
 import io
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List
+from datetime import date, datetime
 
 from app.db import get_db
-from app.models import Company, Deal, Invoice, DealStage, User, ForecastSnapshot
-from app.routers.auth import get_current_user
-from datetime import date, datetime
+from app.models import Company, Deal, Invoice, DealStage, ForecastSnapshot
+from app.routers.auth import get_current_user_with_org
 
 router = APIRouter()
 
 
 def _fuzzy_match(name: str, companies: List[Company]) -> Company | None:
-    """Simple case-insensitive substring match for company names."""
     name_lower = name.lower().strip()
     for c in companies:
         if c.name.lower() in name_lower or name_lower in c.name.lower():
@@ -33,13 +29,11 @@ def _fuzzy_match(name: str, companies: List[Company]) -> Company | None:
 async def upload_tally_csv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_org_role: tuple = Depends(get_current_user_with_org),
 ):
-    """
-    Upload a Tally invoice export CSV and reconcile against CRM deals.
+    """Upload a Tally invoice export CSV and reconcile against CRM deals."""
+    _, org_id, _ = user_org_role
 
-    Expected CSV columns: company_name, invoice_date, amount, status
-    """
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are supported")
 
@@ -53,15 +47,14 @@ async def upload_tally_csv(
     if not rows:
         raise HTTPException(status_code=400, detail="CSV file is empty")
 
-    # Validate columns
     required_cols = {"company_name", "invoice_date", "amount", "status"}
     if not required_cols.issubset(set(rows[0].keys())):
         raise HTTPException(
             status_code=400,
-            detail=f"CSV must have columns: {', '.join(required_cols)}"
+            detail=f"CSV must have columns: {', '.join(required_cols)}",
         )
 
-    companies = db.query(Company).all()
+    companies = db.query(Company).filter(Company.org_id == org_id).all()
     invoiced_total = 0
     matched_invoices = []
     unmatched_rows = []
@@ -79,12 +72,12 @@ async def upload_tally_csv(
                 inv_date = date.today()
 
         if company:
-            # Save invoice record
             invoice = Invoice(
+                org_id=org_id,
                 company_id=company.id,
                 amount_inr=amount,
                 invoice_date=inv_date,
-                status=row["status"].strip().lower()
+                status=row["status"].strip().lower(),
             )
             db.add(invoice)
             invoiced_total += amount
@@ -92,28 +85,33 @@ async def upload_tally_csv(
                 "company_name": row["company_name"],
                 "matched_to": company.name,
                 "amount_inr": amount,
-                "status": row["status"]
+                "status": row["status"],
             })
         else:
             unmatched_rows.append(row["company_name"])
 
     db.commit()
 
-    # Pipeline value — sum of non-lost deals
     pipeline_value = sum(
         d.value_inr or 0
-        for d in db.query(Deal).filter(Deal.stage != DealStage.CLOSED_LOST).all()
+        for d in db.query(Deal).filter(
+            Deal.org_id == org_id, Deal.stage != DealStage.CLOSED_LOST
+        ).all()
     )
 
-    # Closed-won deals with no matching invoice
-    closed_won_deals = db.query(Deal).filter(Deal.stage == DealStage.CLOSED_WON).all()
-    invoiced_company_ids = {i.company_id for i in db.query(Invoice).all()}
+    closed_won_deals = db.query(Deal).filter(
+        Deal.org_id == org_id, Deal.stage == DealStage.CLOSED_WON
+    ).all()
+    invoiced_company_ids = {
+        i.company_id
+        for i in db.query(Invoice).filter(Invoice.org_id == org_id).all()
+    }
     unmatched_closed = [
         {
             "deal_id": d.id,
             "title": d.title,
             "company": d.company.name if d.company else "Unknown",
-            "value_inr": d.value_inr
+            "value_inr": d.value_inr,
         }
         for d in closed_won_deals
         if d.company_id not in invoiced_company_ids
@@ -124,12 +122,12 @@ async def upload_tally_csv(
         if pipeline_value > 0 else 0
     )
 
-    # Save snapshot
     snapshot = ForecastSnapshot(
+        org_id=org_id,
         pipeline_value_inr=pipeline_value,
         invoiced_value_inr=invoiced_total,
         gap_pct=gap_pct,
-        notes=f"Imported {len(matched_invoices)} invoices from {file.filename}"
+        notes=f"Imported {len(matched_invoices)} invoices from {file.filename}",
     )
     db.add(snapshot)
     db.commit()
@@ -142,42 +140,53 @@ async def upload_tally_csv(
         "gap_pct": gap_pct,
         "matched_invoices": len(matched_invoices),
         "unmatched_rows": unmatched_rows,
-        "closed_won_not_invoiced": unmatched_closed
+        "closed_won_not_invoiced": unmatched_closed,
     }
 
 
 @router.get("/snapshot/latest")
 def get_latest_snapshot(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_org_role: tuple = Depends(get_current_user_with_org),
 ):
-    """Get the most recent forecast snapshot"""
-    snap = db.query(ForecastSnapshot).order_by(
-        ForecastSnapshot.generated_at.desc()
-    ).first()
+    """Get the most recent forecast snapshot for the current org."""
+    _, org_id, _ = user_org_role
+
+    snap = (
+        db.query(ForecastSnapshot)
+        .filter(ForecastSnapshot.org_id == org_id)
+        .order_by(ForecastSnapshot.generated_at.desc())
+        .first()
+    )
+
     if not snap:
-        # Compute live if no snapshot exists
         pipeline_value = sum(
             d.value_inr or 0
-            for d in db.query(Deal).filter(Deal.stage != DealStage.CLOSED_LOST).all()
+            for d in db.query(Deal).filter(
+                Deal.org_id == org_id, Deal.stage != DealStage.CLOSED_LOST
+            ).all()
         )
         return {
             "pipeline_value_inr": pipeline_value,
             "invoiced_value_inr": 0,
             "gap_pct": 100 if pipeline_value > 0 else 0,
             "notes": "No invoice data uploaded yet",
-            "closed_won_not_invoiced": []
+            "closed_won_not_invoiced": [],
         }
 
-    # Re-compute closed-won without invoices
-    closed_won = db.query(Deal).filter(Deal.stage == DealStage.CLOSED_WON).all()
-    invoiced_ids = {i.company_id for i in db.query(Invoice).all()}
+    closed_won = db.query(Deal).filter(
+        Deal.org_id == org_id, Deal.stage == DealStage.CLOSED_WON
+    ).all()
+    invoiced_ids = {
+        i.company_id
+        for i in db.query(Invoice).filter(Invoice.org_id == org_id).all()
+    }
     unmatched_closed = [
         {
             "deal_id": d.id,
             "title": d.title,
             "company": d.company.name if d.company else "Unknown",
-            "value_inr": d.value_inr
+            "value_inr": d.value_inr,
         }
         for d in closed_won if d.company_id not in invoiced_ids
     ]
@@ -188,14 +197,13 @@ def get_latest_snapshot(
         "gap_pct": snap.gap_pct,
         "notes": snap.notes,
         "generated_at": snap.generated_at,
-        "closed_won_not_invoiced": unmatched_closed
+        "closed_won_not_invoiced": unmatched_closed,
     }
 
 
 @router.get("/sample-csv-template")
 def get_sample_csv():
-    """Return a sample CSV template for download"""
-    from fastapi.responses import Response
+    """Return a sample CSV template for download."""
     csv_content = (
         "company_name,invoice_date,amount,status\n"
         "TechVision Solutions,2024-01-15,500000,paid\n"
@@ -206,5 +214,5 @@ def get_sample_csv():
     return Response(
         content=csv_content,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=tally_invoice_template.csv"}
+        headers={"Content-Disposition": "attachment; filename=tally_invoice_template.csv"},
     )

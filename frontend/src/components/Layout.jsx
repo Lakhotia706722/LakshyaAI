@@ -14,15 +14,19 @@ const navigation = [
 export default function Layout({ children, user, onLogout }) {
   const location = useLocation()
   const [apiStatus, setApiStatus] = useState(null)
+  const [org, setOrg] = useState(null)
 
   useEffect(() => {
     api.get('/status').then(r => setApiStatus(r.data)).catch(() => {})
+    api.get('/org').then(r => setOrg(r.data)).catch(() => {})
   }, [])
 
   const currentPage = navigation.find(item =>
     item.path === location.pathname ||
     (item.path !== '/' && location.pathname.startsWith(item.path))
   )
+
+  const showEmailWarning = user && user.is_email_verified === false
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -32,7 +36,7 @@ export default function Layout({ children, user, onLogout }) {
           <h1 className="text-2xl font-bold tracking-tight">LAKSHYA AI</h1>
           <p className="text-xs text-primary-200 mt-1">Revenue Intelligence</p>
         </div>
-        
+
         <nav className="flex-1 px-3 overflow-y-auto">
           {navigation.map((item) => {
             const isActive = location.pathname === item.path ||
@@ -53,8 +57,14 @@ export default function Layout({ children, user, onLogout }) {
             )
           })}
         </nav>
-        
+
+        {/* User / Org info */}
         <div className="p-4 border-t border-primary-700 shrink-0">
+          {org && (
+            <p className="text-xs text-primary-300 mb-2 truncate">
+              🏢 {org.name}
+            </p>
+          )}
           <div className="flex items-center">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{user?.name}</p>
@@ -73,6 +83,16 @@ export default function Layout({ children, user, onLogout }) {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Email verification warning */}
+        {showEmailWarning && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center gap-2 text-sm text-amber-800">
+            <span>⚠️</span>
+            <span>
+              Your email address is not verified. Check your inbox for a verification link.
+            </span>
+          </div>
+        )}
+
         {/* Top Bar */}
         <header className="bg-white shadow-sm shrink-0">
           <div className="px-6 py-4 flex items-center justify-between">

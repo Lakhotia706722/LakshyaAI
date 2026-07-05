@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 
 export default function Login({ onLogin }) {
@@ -14,16 +15,20 @@ export default function Login({ onLogin }) {
 
     try {
       const response = await api.post('/auth/login', { email, password })
-      const { access_token } = response.data
-      
-      // Get user info
+      const { access_token, refresh_token } = response.data
+
       const userResponse = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${access_token}` }
+        headers: { Authorization: `Bearer ${access_token}` },
       })
-      
-      onLogin(access_token, userResponse.data)
+
+      onLogin(access_token, refresh_token, userResponse.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please try again.')
+      if (err.response?.status === 429) {
+        const retryAfter = err.response.headers['retry-after']
+        setError(`Too many login attempts. Try again in ${retryAfter ? Math.ceil(retryAfter / 60) + ' minutes' : 'a few minutes'}.`)
+      } else {
+        setError(err.response?.data?.detail || 'Login failed. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -39,7 +44,7 @@ export default function Login({ onLogin }) {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -54,7 +59,7 @@ export default function Login({ onLogin }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="admin@lakshya.ai"
+              placeholder="you@company.com"
               required
             />
           </div>
@@ -74,6 +79,12 @@ export default function Login({ onLogin }) {
             />
           </div>
 
+          <div className="flex items-center justify-between text-sm">
+            <Link to="/forgot-password" className="text-primary-600 hover:text-primary-700">
+              Forgot password?
+            </Link>
+          </div>
+
           <button
             type="submit"
             disabled={isLoading}
@@ -84,8 +95,16 @@ export default function Login({ onLogin }) {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Demo credentials:</p>
-          <p className="font-mono text-xs mt-1">admin@lakshya.ai / admin123</p>
+          <p>
+            Don't have an account?{' '}
+            <Link to="/register" className="text-primary-600 hover:text-primary-700 font-medium">
+              Create one
+            </Link>
+          </p>
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+            <p className="font-medium text-gray-700">Demo credentials:</p>
+            <p className="font-mono text-xs mt-1">admin@lakshya.ai / admin123</p>
+          </div>
         </div>
       </div>
     </div>

@@ -7,8 +7,13 @@ pydantic-settings>=2.6.0
 psycopg2-binary>=2.9.9
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
 python-multipart>=0.0.12
 anthropic>=0.40.0
 openai>=1.58.0
 python-dotenv>=1.0.0
 email-validator>=2.0.0
+# Phase 6 additions
+redis>=5.0.0
+boto3>=1.35.0
+filetype>=1.2.0

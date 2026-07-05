@@ -2,6 +2,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
+import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import Deals from './pages/Deals'
 import Companies from './pages/Companies'
@@ -9,7 +13,7 @@ import WhatsAppIntelligence from './pages/WhatsAppIntelligence'
 import CallIntelligence from './pages/CallIntelligence'
 import CompanyGraph from './pages/CompanyGraph'
 import Forecasting from './pages/Forecasting'
-import { api } from './api/client'
+import { api, setTokens, clearTokens } from './api/client'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -21,28 +25,41 @@ function App() {
   }, [])
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('token')
-    if (token) {
+    // On load, try to restore session via refresh token
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) {
       try {
-        const response = await api.get('/auth/me')
-        setUser(response.data)
+        const response = await api.post('/auth/refresh', { refresh_token: refreshToken })
+        const { access_token, refresh_token: newRefresh } = response.data
+        setTokens(access_token, newRefresh)
+
+        const userResponse = await api.get('/auth/me')
+        setUser(userResponse.data)
         setIsAuthenticated(true)
-      } catch (error) {
-        localStorage.removeItem('token')
+      } catch {
+        clearTokens()
         setIsAuthenticated(false)
       }
     }
     setIsLoading(false)
   }
 
-  const handleLogin = (token, userData) => {
-    localStorage.setItem('token', token)
+  const handleLogin = (accessToken, refreshToken, userData) => {
+    setTokens(accessToken, refreshToken)
     setUser(userData)
     setIsAuthenticated(true)
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
+  const handleLogout = async () => {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) {
+      try {
+        await api.post('/auth/logout', { refresh_token: refreshToken })
+      } catch {
+        // Best-effort — clear locally even if server call fails
+      }
+    }
+    clearTokens()
     setUser(null)
     setIsAuthenticated(false)
   }
@@ -50,7 +67,7 @@ function App() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-xl">Loading...</div>
+        <div className="text-xl text-gray-500">Loading...</div>
       </div>
     )
   }
@@ -58,15 +75,20 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route 
-          path="/login" 
-          element={
-            isAuthenticated ? 
-            <Navigate to="/" replace /> : 
-            <Login onLogin={handleLogin} />
-          } 
+        {/* Public routes */}
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />}
         />
-        
+        <Route
+          path="/register"
+          element={isAuthenticated ? <Navigate to="/" replace /> : <Register />}
+        />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+
+        {/* Protected routes */}
         <Route
           path="/*"
           element={

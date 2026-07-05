@@ -4,26 +4,20 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.db import get_db
-from app.models import DealEvent, Deal, User, EventSource, DealStage
+from app.models import DealEvent, Deal, EventSource, DealStage
 from app.schemas import WhatsAppIntelligenceResponse, DealEventResponse
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user_with_org
 from app.services.ai_extraction import AIExtractionService
 
 router = APIRouter()
 
 
 def _demo_intelligence_stub(text: str) -> dict:
-    """
-    Fallback stub returned when ANTHROPIC_API_KEY is not configured.
-    Lets the UI show a realistic-looking demo result so the interface
-    is still presentable without live AI.
-    """
     return {
         "stage": "proposal",
         "summary": (
             "⚠️ Demo result — ANTHROPIC_API_KEY not configured. "
-            "Add it to backend/.env to get real AI analysis. "
-            "This stub shows what the output structure looks like."
+            "Add it to backend/.env to get real AI analysis."
         ),
         "next_steps": [
             {"action": "Send pricing proposal", "owner": "Sales Rep", "deadline": None, "priority": "high"},
@@ -42,7 +36,6 @@ def _demo_intelligence_stub(text: str) -> dict:
         "key_insights": [
             "Prospect is actively evaluating alternatives",
             "Budget is the primary obstacle",
-            "Demo scheduled — strong buying signal",
         ],
         "_demo_mode": True,
     }
@@ -55,24 +48,21 @@ async def _run_analysis(
     new_deal_title: Optional[str],
     new_deal_company_id: Optional[int],
     db: Session,
-    current_user: User,
+    user,
+    org_id: int,
 ) -> dict:
     """Core analysis logic shared by /analyze and /upload endpoints."""
 
-    # --- AI extraction (graceful fallback when key not set) ---
     try:
         ai_service = AIExtractionService()
         intelligence = ai_service.extract_whatsapp_intelligence(conversation_text)
     except ValueError:
         intelligence = _demo_intelligence_stub(conversation_text)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI extraction error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"AI extraction error: {str(e)}")
 
-    # --- Deal creation ---
     target_deal_id = deal_id
+
     if create_new_deal and new_deal_title and new_deal_company_id:
         stage_map = {
             "prospecting": DealStage.PROSPECTING,
@@ -83,10 +73,11 @@ async def _run_analysis(
             "closed_lost": DealStage.CLOSED_LOST,
         }
         new_deal = Deal(
+            org_id=org_id,
             company_id=new_deal_company_id,
             title=new_deal_title,
             stage=stage_map.get(intelligence["stage"], DealStage.PROSPECTING),
-            owner_name=current_user.name,
+            owner_name=user.name,
             risk_flag=len(intelligence.get("risk_signals", [])) > 0,
             risk_reason=", ".join(
                 r["description"] for r in intelligence.get("risk_signals", [])[:2]
@@ -97,12 +88,17 @@ async def _run_analysis(
         db.refresh(new_deal)
         target_deal_id = new_deal.id
 
-    # --- Save deal event ---
     deal_event = None
     if target_deal_id:
+        # Ensure deal belongs to this org
+        deal = db.query(Deal).filter(
+            Deal.id == target_deal_id, Deal.org_id == org_id
+        ).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+
         next_step_text = None
         next_step_deadline = None
-
         steps = intelligence.get("next_steps", [])
         if steps:
             top = sorted(steps, key=lambda x: {"high": 0, "medium": 1, "low": 2}.get(x.get("priority", "low"), 2))[0]
@@ -114,6 +110,7 @@ async def _run_analysis(
                     pass
 
         deal_event = DealEvent(
+            org_id=org_id,
             deal_id=target_deal_id,
             source=EventSource.WHATSAPP,
             raw_text=conversation_text,
@@ -123,14 +120,11 @@ async def _run_analysis(
         )
         db.add(deal_event)
 
-        # Update deal risk flag
         if intelligence.get("risk_signals"):
-            deal = db.query(Deal).filter(Deal.id == target_deal_id).first()
-            if deal:
-                deal.risk_flag = True
-                high = [r for r in intelligence["risk_signals"] if r.get("severity") == "high"]
-                if high:
-                    deal.risk_reason = high[0]["description"]
+            deal.risk_flag = True
+            high = [r for r in intelligence["risk_signals"] if r.get("severity") == "high"]
+            if high:
+                deal.risk_reason = high[0]["description"]
 
         db.commit()
         db.refresh(deal_event)
@@ -153,15 +147,15 @@ async def analyze_whatsapp_conversation(
     new_deal_title: Optional[str] = Form(None),
     new_deal_company_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    user_org_role: tuple = Depends(get_current_user_with_org),
 ):
     """Analyze pasted WhatsApp conversation text."""
+    user, org_id, _ = user_org_role
     if not conversation_text.strip():
         raise HTTPException(status_code=400, detail="conversation_text cannot be empty")
-
     return await _run_analysis(
         conversation_text, deal_id, create_new_deal,
-        new_deal_title, new_deal_company_id, db, current_user
+        new_deal_title, new_deal_company_id, db, user, org_id,
     )
 
 
@@ -173,9 +167,10 @@ async def upload_whatsapp_file(
     new_deal_title: Optional[str] = Form(None),
     new_deal_company_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    user_org_role: tuple = Depends(get_current_user_with_org),
 ):
     """Upload and analyze a WhatsApp export .txt file."""
+    user, org_id, _ = user_org_role
     if not file.filename.endswith(".txt"):
         raise HTTPException(status_code=400, detail="Only .txt files are supported")
 
@@ -190,7 +185,7 @@ async def upload_whatsapp_file(
 
     return await _run_analysis(
         conversation_text, deal_id, create_new_deal,
-        new_deal_title, new_deal_company_id, db, current_user
+        new_deal_title, new_deal_company_id, db, user, org_id,
     )
 
 
@@ -198,9 +193,15 @@ async def upload_whatsapp_file(
 def get_deal_events(
     deal_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    user_org_role: tuple = Depends(get_current_user_with_org),
 ):
-    """Get all WhatsApp intelligence events for a deal."""
+    """Get all WhatsApp intelligence events for a deal (org-scoped)."""
+    _, org_id, _ = user_org_role
+    # Verify deal belongs to this org
+    deal = db.query(Deal).filter(Deal.id == deal_id, Deal.org_id == org_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
     return (
         db.query(DealEvent)
         .filter(DealEvent.deal_id == deal_id, DealEvent.source == EventSource.WHATSAPP)
