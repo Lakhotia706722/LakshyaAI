@@ -55,6 +55,7 @@ class Organization(Base):
     name = Column(String, nullable=False)
     plan_tier = Column(String, default="free", nullable=False)
     recording_retention_days = Column(Integer, default=90, nullable=False)
+    feature_flags = Column(JSON, default={"ai_extraction": False, "crm_sync": False})
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

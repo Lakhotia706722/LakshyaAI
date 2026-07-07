@@ -208,3 +208,56 @@ def get_deal_events(
         .order_by(DealEvent.created_at.desc())
         .all()
     )
+
+
+@router.get("/webhook/{org_id}")
+async def verify_whatsapp_webhook(
+    org_id: int,
+    hub_mode: str = Depends(lambda mode=None: mode),
+    hub_challenge: str = Depends(lambda challenge=None: challenge),
+    hub_verify_token: str = Depends(lambda verify_token=None: verify_token)
+):
+    """WhatsApp webhook verification endpoint."""
+    # In a real app, verify the token matches a secure environment variable
+    return int(hub_challenge) if hub_challenge else "OK"
+
+
+@router.post("/webhook/{org_id}")
+async def receive_whatsapp_webhook(
+    org_id: int,
+    payload: dict,
+    db: Session = Depends(get_db)
+):
+    """Receive live messages from WhatsApp Business API."""
+    # Extract message text from payload (assuming standard WhatsApp Cloud API format)
+    try:
+        entry = payload.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+        
+        if not messages:
+            return {"status": "ignored", "reason": "no messages"}
+            
+        message = messages[0]
+        message_text = message.get("text", {}).get("body", "")
+        phone_number = message.get("from", "")
+        
+        if not message_text:
+             return {"status": "ignored", "reason": "not a text message"}
+
+        # For MVP, we will try to find a deal by this phone number or just create a stub event
+        # This is where we'd invoke AIExtractionService in a background task
+        # and then CRMSyncService
+        
+        # Here we mock user context for _run_analysis
+        class DummyUser:
+            name = f"Webhook User ({phone_number})"
+            
+        # Simplified async call or background task dispatch would go here.
+        # For MVP, we'll invoke _run_analysis directly if we can find/create a deal.
+        
+        return {"status": "received"}
+        
+    except (IndexError, KeyError) as e:
+        return {"status": "error", "reason": str(e)}

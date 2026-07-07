@@ -7,19 +7,27 @@ export default {
   theme: {
     extend: {
       colors: {
+        bg: 'var(--color-bg)',
+        surface: 'var(--color-surface)',
+        ink: 'var(--color-ink)',
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          DEFAULT: 'var(--color-primary)',
+          hover: '#2F298F', // slightly darker for hover states if needed
         },
+        accent: 'var(--color-accent)',
+        risk: 'var(--color-risk)',
+        growth: 'var(--color-growth)',
+        border: 'var(--color-border)',
       },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        display: ['Space Grotesk', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'monospace'],
+      },
+      boxShadow: {
+        'card': '0 4px 6px -1px rgba(21, 24, 51, 0.05), 0 2px 4px -1px rgba(21, 24, 51, 0.03)',
+        'card-hover': '0 10px 15px -3px rgba(21, 24, 51, 0.08), 0 4px 6px -2px rgba(21, 24, 51, 0.04)',
+      }
     },
   },
   plugins: [],

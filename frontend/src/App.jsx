@@ -13,6 +13,9 @@ import WhatsAppIntelligence from './pages/WhatsAppIntelligence'
 import CallIntelligence from './pages/CallIntelligence'
 import CompanyGraph from './pages/CompanyGraph'
 import Forecasting from './pages/Forecasting'
+import ManagerDashboard from './pages/ManagerDashboard'
+import Showcase from './pages/Showcase'
+import { ToastProvider } from './components/ui/Toast'
 import { api, setTokens, clearTokens } from './api/client'
 
 function App() {
@@ -73,44 +76,50 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        {/* Public routes */}
-        <Route
-          path="/login"
-          element={isAuthenticated ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />}
-        />
-        <Route
-          path="/register"
-          element={isAuthenticated ? <Navigate to="/" replace /> : <Register />}
-        />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
+    <ToastProvider>
+      <Router>
+        <Routes>
+          {/* Showcase route for review */}
+          <Route path="/showcase" element={<Showcase />} />
 
-        {/* Protected routes */}
-        <Route
-          path="/*"
-          element={
-            isAuthenticated ? (
-              <Layout user={user} onLogout={handleLogout}>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/deals" element={<Deals />} />
-                  <Route path="/companies" element={<Companies />} />
-                  <Route path="/whatsapp-intelligence" element={<WhatsAppIntelligence />} />
-                  <Route path="/call-intelligence" element={<CallIntelligence />} />
-                  <Route path="/company-graph" element={<CompanyGraph />} />
-                  <Route path="/forecasting" element={<Forecasting />} />
-                </Routes>
-              </Layout>
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-      </Routes>
-    </Router>
+          {/* Public routes */}
+          <Route
+            path="/login"
+            element={isAuthenticated ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />}
+          />
+          <Route
+            path="/register"
+            element={isAuthenticated ? <Navigate to="/" replace /> : <Register />}
+          />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+
+          {/* Protected routes */}
+          <Route
+            path="/*"
+            element={
+              isAuthenticated ? (
+                <Layout user={user} onLogout={handleLogout}>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/manager" element={<ManagerDashboard />} />
+                    <Route path="/deals" element={<Deals />} />
+                    <Route path="/companies" element={<Companies />} />
+                    <Route path="/whatsapp-intelligence" element={<WhatsAppIntelligence />} />
+                    <Route path="/call-intelligence" element={<CallIntelligence />} />
+                    <Route path="/company-graph" element={<CompanyGraph />} />
+                    <Route path="/forecasting" element={<Forecasting />} />
+                  </Routes>
+                </Layout>
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+        </Routes>
+      </Router>
+    </ToastProvider>
   )
 }
 
